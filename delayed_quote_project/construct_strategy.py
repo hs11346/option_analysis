@@ -6,14 +6,14 @@ from opx_chain import options_chain
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
 def underlying_vol(ticker, days=60):
-    df = yf.download(ticker, interal='1d',period = '1y')
+    df = yf.download(ticker, interval='1d',period = '1y')
     df['Ret'] = (df['Adj Close'] / df['Adj Close'].shift(1))
     df['Volatility'] = df['Ret'].rolling(window=days).std() # unannualised
     return df.Volatility.iloc[-1]
 def get_current_price(symbol):
     ticker = yf.Ticker(symbol)
-    todays_data = ticker.history(period='1d')
-    return todays_data['Close'][0]
+    todays_data = ticker.history(period='1mo', interval = '1d')
+    return todays_data['Close'][-1]
 def PCS_screener(list_,IsITM = False, moneyness = 0.8, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
     x = []
     for i in list_:
