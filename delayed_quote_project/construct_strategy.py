@@ -18,29 +18,31 @@ def PCS_screener(list_,IsITM = False, moneyness = 0.8, max_strike_width = 4, min
     x = []
     for i in list_:
         results = put_credit_spread(i, IsITM = IsITM, moneyness = moneyness, max_strike_width = max_strike_width, min_dte = min_dte, max_dte = max_dte, fees = fees, min_dist = min_dist, min_bid = min_bid)
+        print("{} combinations found".format(len(results)))
         if results.empty == False:
             x.append(results)
         else:
-            print("No combination found for underlying\n")
+            pass
     try:
         df = pd.concat(x)
         return df
     except ValueError:
-        print("No combination found")
+        pass
 
 def CCS_screener(list_,IsITM = False, moneyness = 1.2, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
     x = []
     for i in list_:
         results = call_credit_spread(i, IsITM = IsITM, moneyness = moneyness, max_strike_width = max_strike_width, min_dte = min_dte, max_dte = max_dte, fees = fees, min_dist = min_dist, min_bid = min_bid)
+        print("{} combinations found".format(len(results)))
         if results.empty == False:
             x.append(results)
         else:
-            print("No combination found for underlying\n")
+            pass
     try:
         df = pd.concat(x)
         return df
     except ValueError:
-        print("No combination found")
+        pass
 def put_credit_spread(underlying, IsITM = False, moneyness = 0.8, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
     # PCS -> Short higher strike, long lower strike; Fee structure based on two way fees, futu fees = $10 per contract ($0.1)
     # Moneyness is the minimum moneyness of option strikes for scanning
@@ -81,6 +83,7 @@ def put_credit_spread(underlying, IsITM = False, moneyness = 0.8, max_strike_wid
     spread_df['dist_RR'] = spread_df.ATM_dist/spread_df.RR_ratio
     spread_df[['short_strike','long_strike','min_vol', 'min_oi']] = spread_df[['short_strike','long_strike','min_vol', 'min_oi']].astype(int)
     spread_df = spread_df.sort_values(by='dist_RR', ascending=False)
+    print("{} combinations found".format(len(spread_df)))
     return spread_df.round(2)
 
 def call_credit_spread(underlying, IsITM = False, moneyness = 1.2, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
@@ -124,6 +127,7 @@ def call_credit_spread(underlying, IsITM = False, moneyness = 1.2, max_strike_wi
     spread_df.fillna(0,inplace=True)
     spread_df[['short_strike','long_strike','min_vol', 'min_oi']] = spread_df[['short_strike','long_strike','min_vol', 'min_oi']].astype(int)
     spread_df = spread_df.sort_values(by='dist_RR', ascending=False)
+    print("{} combinations found".format(len(spread_df)))
     return spread_df.round(2)
 
 def rsi_value(underlying, upper = 70, lower = 30):
