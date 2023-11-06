@@ -81,7 +81,7 @@ def put_credit_spread(underlying, IsITM = False, moneyness = 0.8, max_strike_wid
     spread_df = spread_df[spread_df.bid >= min_bid]
     # RR_ratio / ATM_dist
     spread_df['dist_RR'] = spread_df.ATM_dist/spread_df.RR_ratio
-    spread_df[['short_strike','long_strike','min_vol', 'min_oi']] = spread_df[['short_strike','long_strike','min_vol', 'min_oi']].astype(int)
+    spread_df[['min_vol', 'min_oi']] = spread_df[['min_vol', 'min_oi']].astype(int)
     spread_df = spread_df.sort_values(by='dist_RR', ascending=False)
     print("{} combinations found".format(len(spread_df)))
     return spread_df.round(2)
@@ -125,7 +125,7 @@ def call_credit_spread(underlying, IsITM = False, moneyness = 1.2, max_strike_wi
     # RR_ratio / ATM_dist
     spread_df['dist_RR'] = spread_df.ATM_dist/spread_df.RR_ratio
     spread_df.fillna(0,inplace=True)
-    spread_df[['short_strike','long_strike','min_vol', 'min_oi']] = spread_df[['short_strike','long_strike','min_vol', 'min_oi']].astype(int)
+    spread_df[['min_vol', 'min_oi']] = spread_df[['min_vol', 'min_oi']].astype(int)
     spread_df = spread_df.sort_values(by='dist_RR', ascending=False)
     print("{} combinations found".format(len(spread_df)))
     return spread_df.round(2)
