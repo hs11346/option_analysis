@@ -3,6 +3,10 @@ import numpy as np
 import warnings
 import yfinance as yf
 from opx_chain import options_chain
+from multiprocessing import Pool, freeze_support
+from functools import partial
+from scipy import stats
+
 warnings.simplefilter(action='ignore', category=FutureWarning)
 warnings.simplefilter(action='ignore', category=UserWarning)
 def underlying_vol(ticker, days=60):
@@ -15,6 +19,8 @@ def get_current_price(symbol):
     todays_data = ticker.history(period='1mo', interval = '1d')
     return todays_data['Close'][-1]
 def PCS_screener(list_,IsITM = False, moneyness = 0.8, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
+    '''
+    // Old version, non-multiprocessing
     x = []
     for i in list_:
         results = put_credit_spread(i, IsITM = IsITM, moneyness = moneyness, max_strike_width = max_strike_width, min_dte = min_dte, max_dte = max_dte, fees = fees, min_dist = min_dist, min_bid = min_bid)
@@ -23,6 +29,9 @@ def PCS_screener(list_,IsITM = False, moneyness = 0.8, max_strike_width = 4, min
             x.append(results)
         else:
             pass
+    '''
+    with Pool() as pool: # New Version, multiprocessing
+        x = pool.map(partial(put_credit_spread, IsITM = IsITM, moneyness = moneyness, max_strike_width = max_strike_width, min_dte = min_dte, max_dte = max_dte, fees = fees, min_dist = min_dist, min_bid = min_bid), list_)
     try:
         df = pd.concat(x)
         return df
@@ -30,6 +39,7 @@ def PCS_screener(list_,IsITM = False, moneyness = 0.8, max_strike_width = 4, min
         pass
 
 def CCS_screener(list_,IsITM = False, moneyness = 1.2, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
+    '''
     x = []
     for i in list_:
         results = call_credit_spread(i, IsITM = IsITM, moneyness = moneyness, max_strike_width = max_strike_width, min_dte = min_dte, max_dte = max_dte, fees = fees, min_dist = min_dist, min_bid = min_bid)
@@ -38,6 +48,11 @@ def CCS_screener(list_,IsITM = False, moneyness = 1.2, max_strike_width = 4, min
             x.append(results)
         else:
             pass
+    '''
+    with Pool() as pool:  # New Version, multiprocessing
+        x = pool.map(partial(call_credit_spread, IsITM=IsITM, moneyness=moneyness, max_strike_width=max_strike_width,
+                             min_dte=min_dte, max_dte=max_dte, fees=fees, min_dist=min_dist, min_bid=min_bid), list_)
+
     try:
         df = pd.concat(x)
         return df
@@ -46,7 +61,6 @@ def CCS_screener(list_,IsITM = False, moneyness = 1.2, max_strike_width = 4, min
 def put_credit_spread(underlying, IsITM = False, moneyness = 0.8, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
     # PCS -> Short higher strike, long lower strike; Fee structure based on two way fees, futu fees = $10 per contract ($0.1)
     # Moneyness is the minimum moneyness of option strikes for scanning
-    print("Start combination for " + underlying + " Put Credit Spread")
     current_price = get_current_price(underlying)
     df = options_chain(underlying)
     df = df[df.ITM == IsITM][df.CPFlag == False][(df.bid >= 0)|(df.ask >=0)][df.strike >= current_price*moneyness] # Extract OTM Puts from chain with non-zero bid-ask
@@ -68,10 +82,11 @@ def put_credit_spread(underlying, IsITM = False, moneyness = 0.8, max_strike_wid
                                   'exDate':df.iloc[short_index].exDate,\
                                   'dte':df.iloc[short_index].dte}
                 spread_df = pd.concat([spread_df,pd.DataFrame(dict_, index = [0])], ignore_index=True)
-    print("All combinations scanned")
     if spread_df.empty:
         return spread_df
     # Risk-reward ratio, Reward adjusted down by fees
+    spread_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    spread_df.dropna(inplace = True)
     spread_df['RR_ratio'] = ((spread_df.bid + spread_df.ask - fees * 2) / (2 * spread_df.width))*100
     spread_df = spread_df[spread_df['RR_ratio'] > 0]
     #ATM distance is the % difference between strike and underlying price divided by the return volatility (adjusted by dte)
@@ -83,13 +98,12 @@ def put_credit_spread(underlying, IsITM = False, moneyness = 0.8, max_strike_wid
     spread_df['dist_RR'] = spread_df.ATM_dist/spread_df.RR_ratio
     spread_df[['min_vol', 'min_oi']] = spread_df[['min_vol', 'min_oi']].astype(int)
     spread_df = spread_df.sort_values(by='dist_RR', ascending=False)
-    print("{} combinations found".format(len(spread_df)))
+    print("{} combinations found for {}".format(len(spread_df), underlying))
     return spread_df.round(2)
 
 def call_credit_spread(underlying, IsITM = False, moneyness = 1.2, max_strike_width = 4, min_dte = 0, max_dte = 30, fees = 0.1, min_dist = 0, min_bid = 0):
     # CCS -> long higher strike, short lower strike; Fee structure based on two way fees, futu fees = $10 per contract ($0.1)
     # Moneyness is the minimum moneyness of option strikes for scanning
-    print("Start combination for " + underlying + " Call Credit Spread")
     current_price = get_current_price(underlying)
     df = options_chain(underlying)
     df = df[df.ITM == IsITM][df.CPFlag == True][(df.bid >= 0)|(df.ask >=0)][df.strike <= current_price*moneyness] # Extract OTM Puts from chain with non-zero bid-ask
@@ -111,10 +125,11 @@ def call_credit_spread(underlying, IsITM = False, moneyness = 1.2, max_strike_wi
                                   'exDate':df.iloc[short_index].exDate,\
                                   'dte':df.iloc[short_index].dte}
                 spread_df = pd.concat([spread_df,pd.DataFrame(dict_, index = [0])], ignore_index=True)
-    print("All combinations scanned")
     if spread_df.empty:
         return spread_df
     # Risk-reward ratio, Reward adjusted down by fees
+    spread_df.replace([np.inf, -np.inf], np.nan, inplace=True)
+    spread_df.dropna(inplace=True)
     spread_df['RR_ratio'] = ((spread_df.bid + spread_df.ask - fees * 2) / (2 * spread_df.width))*100
     spread_df = spread_df[spread_df['RR_ratio'] > 0]
     #ATM distance is the % difference between strike and underlying price divided by the return volatility (adjusted by dte)
@@ -127,12 +142,12 @@ def call_credit_spread(underlying, IsITM = False, moneyness = 1.2, max_strike_wi
     spread_df.fillna(0,inplace=True)
     spread_df[['min_vol', 'min_oi']] = spread_df[['min_vol', 'min_oi']].astype(int)
     spread_df = spread_df.sort_values(by='dist_RR', ascending=False)
-    print("{} combinations found".format(len(spread_df)))
+    print("{} combinations found for {}".format(len(spread_df),underlying))
     return spread_df.round(2)
 
 def rsi_value(underlying, upper = 70, lower = 30):
     symbol = yf.Ticker(underlying)
-    df = symbol.history(interval="1d", period="1mo").tail(30)
+    df = symbol.history(interval="1d", period="1mo", auto_adjust=True).tail(30)
     change = df["Close"].diff()
     change.dropna(inplace=True)
     # Create two copies of the Closing price Series
@@ -154,7 +169,14 @@ def rsi_value(underlying, upper = 70, lower = 30):
         value = 0
     return value
 
-def RSI_screener(df, upper = 70, lower = 30):
+def one_year_percentile(underlying):
+    symbol = yf.Ticker(underlying)
+    df = symbol.history(interval="1d", period="1y", auto_adjust=True)
+    current = df.Close.iloc[-1]
+    return stats.percentileofscore(df['Close'], current, kind='mean')
+
+def px_screener(df, upper = 70, lower = 30):
     df['rsi'] = df.Tickers.apply(lambda x: rsi_value(x, upper = upper, lower= lower))
-    return df[df.rsi != 0]
+    df['percentile'] = df.Tickers.apply(lambda x: one_year_percentile(x))
+    return df
 
